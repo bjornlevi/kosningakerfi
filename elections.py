@@ -18,26 +18,33 @@ def allocate_national_seats(total_seats: int, party_votes_total: Dict[str, int])
     total_votes = sum(party_votes_total.values())
     if total_votes == 0:
         raise ValueError("Total votes are zero; cannot allocate seats.")
+
     df = pd.DataFrame(
         [{"Party": p, "Votes": v, "Quota": v * total_seats / total_votes}
          for p, v in party_votes_total.items()]
     )
+
     df["Floor"] = df["Quota"].apply(math.floor)
+    df["VoteShare"] = df["Votes"] / total_votes
     df["Cap"] = df["Quota"].apply(math.ceil)
     df["Fraction"] = df["Quota"] - df["Floor"]
     df["Seats"] = df["Floor"]
+
     remaining = total_seats - int(df["Seats"].sum())
     logs = []
+
     while remaining > 0:
         elig = df[df["Seats"] < df["Cap"]].copy()
         if elig.empty:
             break
-        elig = elig.sort_values(by=["Fraction","Votes","Party"], ascending=[False,False,True])
+        elig = elig.sort_values(by=["Fraction", "Votes", "Party"], ascending=[False, False, True])
         winner_party = elig.iloc[0]["Party"]
         df.loc[df["Party"] == winner_party, "Seats"] += 1
         remaining -= 1
         logs.append(f"Remainder seat -> {winner_party}")
+
     return df.set_index("Party")["Seats"].to_dict(), df.sort_values("Votes", ascending=False), logs
+
 
 def assign_constituency_seats(const_df: pd.DataFrame,
                               party_seats: Dict[str, int],
@@ -133,7 +140,7 @@ def main():
     print("=== NATIONAL RESULTS (caps + remainders) ===")
     nat_view = nat_df.copy()
     nat_view["Assigned_Seats"] = nat_view["Party"].map(party_seats.get)
-    nat_view = nat_view[["Party","Votes","Quota","Floor","Fraction","Cap","Assigned_Seats"]]
+    nat_view = nat_view[["Party","Votes", "VoteShare", "Quota","Floor","Fraction","Cap","Assigned_Seats"]]
     print(nat_view.sort_values(["Assigned_Seats","Votes"], ascending=[False,False])
               .to_string(index=False,
                          formatters={"Quota":"{:,.3f}".format, "Fraction":"{:,.3f}".format}))
